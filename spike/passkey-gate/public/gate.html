@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>UCP Tester · Passkey Gate Spike</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; max-width: 540px; margin: 4rem auto; padding: 0 1rem; color: #1a1a1a; }
+    h1 { font-size: 1.2rem; margin-bottom: 0.25rem; }
+    p.lede { color: #555; margin-top: 0; }
+    button { font-size: 1rem; padding: 0.6rem 1rem; border-radius: 6px; border: 1px solid #1a1a1a; background: #fff; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .step { padding: 0.5rem 0; border-top: 1px solid #eee; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; }
+    .step.ok { color: #0a7f2e; }
+    .step.err { color: #b00020; white-space: pre-wrap; }
+    #log { margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <h1>UCP Tester · Passkey Gate Spike</h1>
+  <p class="lede">Press the button to register a passkey, then authorize it. The whole flow uses your device's secure element (Touch ID, Windows Hello, hardware key).</p>
+  <button id="go">Run passkey ceremony</button>
+  <div id="log"></div>
+
+  <script type="module">
+    import {
+      startRegistration,
+      startAuthentication,
+    } from "https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@13.1.0/dist/bundle/index.js";
+
+    const log = document.getElementById("log");
+    const btn = document.getElementById("go");
+    const step = (text, cls = "") => {
+      const div = document.createElement("div");
+      div.className = "step " + cls;
+      div.textContent = text;
+      log.appendChild(div);
+      return div;
+    };
+
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        step("→ GET /register/options");
+        const regOpts = await fetch("/register/options").then((r) => r.json());
+        step("→ navigator.credentials.create (Touch ID will prompt)");
+        const regResp = await startRegistration({ optionsJSON: regOpts });
+        step("→ POST /register/verify");
+        const regVerify = await fetch("/register/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(regResp),
+        }).then((r) => r.json());
+        if (!regVerify.verified) throw new Error("registration not verified: " + JSON.stringify(regVerify));
+        step("✓ passkey registered", "ok");
+
+        step("→ GET /authenticate/options");
+        const authOpts = await fetch("/authenticate/options").then((r) => r.json());
+        step("→ navigator.credentials.get (Touch ID will prompt again)");
+        const authResp = await startAuthentication({ optionsJSON: authOpts });
+        step("→ POST /authenticate/verify");
+        const authVerify = await fetch("/authenticate/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(authResp),
+        }).then((r) => r.json());
+        if (!authVerify.verified) throw new Error("auth not verified: " + JSON.stringify(authVerify));
+        step("✓ assertion verified · counter=" + authVerify.authenticatorInfo.newCounter, "ok");
+        step("✓ result sent to helper stdout · you can close this tab", "ok");
+      } catch (err) {
+        step("✗ " + (err?.message ?? String(err)), "err");
+      }
+    });
+  </script>
+</body>
+</html>

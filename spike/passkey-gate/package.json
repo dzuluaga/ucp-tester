@@ -1,0 +1,14 @@
+{
+  "name": "ucp-tester-passkey-gate-spike",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Phase 0 spike: prove a Claude skill can drive a real WebAuthn ceremony end-to-end via a local helper.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "^13.1.1",
+    "express": "^4.21.2"
+  }
+}
