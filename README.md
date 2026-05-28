@@ -6,6 +6,12 @@ When an AI agent buys something on your behalf, *who authorizes the payment?* Th
 
 It ships as a Claude Code plugin.
 
+## Demo
+
+[![Watch the end-to-end demo](https://img.youtube.com/vi/qE_BsghAs98/maxresdefault.jpg)](https://youtu.be/qE_BsghAs98)
+
+*Touch ID for AI agents — a passkey-gated checkout, end to end.*
+
 ## Quickstart
 
 In [Claude Code](https://claude.com/claude-code):
