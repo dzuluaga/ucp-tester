@@ -160,6 +160,25 @@ This gives the tester something the rest of the toolchain hasn't shown yet: a re
 
 ---
 
+## Demo modalities — "who authorizes the agent?"
+
+The passkey gate is the same conceptual slot across many credential-presentation flows. Each is a self-contained story we can showcase as its own video. The arc runs from *real-but-mocked today* → *automatable* → *cross-device* → *real payment rails* → *the credential-presentation future*.
+
+| # | Modality | What it demonstrates | What flows back | Maturity | Demo cost |
+|---|---|---|---|---|---|
+| 1 | **Local platform passkey gate** (Touch ID / Windows Hello / hardware key) | "Buy a flat white for $5" → browser → biometric → verified `ap2.PaymentMandate` in receipt card + terminal JSON → 4 gates validated | Signed WebAuthn assertion releasing the (mock) signing key | **Shipping now** (macOS validated; Windows Hello & roaming hardware key are variants) | **Zero** — already built (the Phase 0 spike) |
+| 2 | **CI / headless virtual authenticator** | The *identical* scenario YAML running with no human and no hardware. "Same test, green in CI." | Synthetic but structurally-real assertion | Standard CDP `WebAuthn.addVirtualAuthenticator`, reliable | **Low** — wire the virtual-authenticator leg |
+| 3 | **Cross-device FIDO hybrid (caBLE)** | Desktop renders a QR, scan with phone, BLE proximity check, phone's passkey completes the ceremony | Passkey assertion from the phone's Secure Enclave / StrongBox | Shipping widely in browsers today | **Medium** — browser-native, mostly UX plumbing |
+| 4 | **Payment Request API + Apple Pay / Google Pay** | Presenting an *existing* wallet card → Face/Touch ID → network-tokenized payment (never the PAN) | DPAN + cryptogram (a payment token, not a passkey assertion) | Production today | **Google Pay TEST = light** (good first pick); **Apple Pay = heavy** (merchant ID + domain verification) |
+| 5 | **Digital Credentials API cross-device** (mDL / VC / DPC) | Verifier site renders a QR → Android camera → wallet presents a credential (aspirationally a Digital Payment Credential = card-as-credential) via OpenID4VP / ISO 18013-5 | Presented, selectively-disclosed credential, BLE-proximity-bound | Emerging; payment (DPC) is issuer-gated, earliest-stage | **High** — the "where this is going" video |
+| 6 | **Same ceremony, phone over Wi-Fi** | Phone hits the local helper URL directly on the LAN and runs the *same* WebAuthn ceremony against StrongBox / Secure Enclave | Same as #1, authored on the phone | Trivial extension of the spike | **Low** — a mobile cut of #1 without QR/caBLE |
+
+**Constraint that holds across all six:** Claude never touches the secure element directly, and secure-element keys/PANs are non-extractable. Every modality presents or *uses* a credential with a hardware-verified human gesture; none reads a key or card number out. In the spike the crypto is mock (MOCK-DEV-SIGNER), no money moves, and no real merchant is contacted — only the ceremony and the artifact's structural shape are real.
+
+Two modalities are free right now (#1, #6), two are low-lift (#2, #3), #4 is the real-money-rails story, and #5 is the visionary one.
+
+---
+
 ## Phased Roadmap
 
 **Phase 0 — Passkey-gate feasibility spike.** *Status: macOS leg ✓, demo skill shipped as Claude Code plugin · CI leg pending · spot-check pending.*
