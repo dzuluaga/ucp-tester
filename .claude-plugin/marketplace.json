@@ -1,0 +1,13 @@
+{
+  "name": "ucp-agentic-tester",
+  "owner": {
+    "name": "Diego Zuluaga"
+  },
+  "plugins": [
+    {
+      "name": "ucp-agentic-tester",
+      "source": "./",
+      "description": "Passkey-gated agentic checkout demo: drives a real WebAuthn ceremony and emits a mock AP2 Payment Mandate. Phase 0 of the UCP Tester PRD."
+    }
+  ]
+}

@@ -30,7 +30,8 @@ Goal of this PRD: rally collaborators around a sharp, tightly-scoped first deliv
 A working slice of this — passkey-gated authorization producing a mock AP2 Payment Mandate — is already runnable. In Claude Code:
 
 ```
-> /plugin install <github-owner>/ucp-agentic-tester
+> /plugin marketplace add <github-owner>/ucp-agentic-tester
+> /plugin install ucp-agentic-tester@ucp-agentic-tester
 > buy a flat white for $5
 ```
 
@@ -189,7 +190,7 @@ What was built and validated:
 
 - Local helper at `spike/passkey-gate/` (Node + Express + `@simplewebauthn/server`). Ephemeral web server, `/gate` page running registration + authentication ceremonies, server-side signature verification, mandate emission.
 - `agentic-purchase-gate` Claude skill at `skills/agentic-purchase-gate/SKILL.md`. Parses intent ("buy X for $Y"), invokes the helper, validates four gates (totals match, hardware-backed user verification, expiry window, subject binding), reports.
-- Demo packaged as a Claude Code plugin (`.claude-plugin/plugin.json`, name `ucp-agentic-tester`), installable via `/plugin install <github-owner>/ucp-agentic-tester` once published.
+- Demo packaged as a Claude Code plugin (`.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`, name `ucp-agentic-tester`), installable once published via `/plugin marketplace add <github-owner>/ucp-agentic-tester` then `/plugin install ucp-agentic-tester@ucp-agentic-tester`.
 - Validated repeatedly on macOS Touch ID (6+ successful runs, multiple distinct purchase intents). Same canonical Payment Mandate rendered in both the browser receipt UI and the terminal JSON per ceremony.
 
 **Still open before Phase 0 is fully closed:**

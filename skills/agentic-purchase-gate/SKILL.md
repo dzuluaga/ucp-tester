@@ -23,7 +23,7 @@ Do NOT use for:
 
 ## Procedure
 
-The helper script `run.sh` lives at `../../spike/passkey-gate/` relative to this SKILL.md. When the skill is loaded (either via `/plugin install` or running `claude` in the plugin repo), Claude Code's bash invocation cwd is set to the skill's own directory, so the relative path resolves correctly.
+The helper script `run.sh` lives at `../../spike/passkey-gate/` relative to this SKILL.md. When the skill is loaded (either via an installed plugin or running `claude` in the plugin repo), Claude Code's bash invocation cwd is set to the skill's own directory, so the relative path resolves correctly. Because the whole repo is the plugin (`marketplace.json` `source: "./"`), `spike/` is copied into the plugin cache alongside the skill, so the relative path still resolves post-install.
 
 **1. Parse the user's intent.**
 
