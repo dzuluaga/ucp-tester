@@ -9,6 +9,26 @@ import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
+import { parseArgs } from "node:util";
+import { buildCart, buildPaymentMandate } from "./mandate-wrapper.js";
+
+const { values: argv } = parseArgs({
+  options: {
+    item: { type: "string", default: "Demo item" },
+    price: { type: "string", default: "41.71" },
+    currency: { type: "string", default: "USD" },
+    merchant: { type: "string", default: "demo-merchant.example.com" },
+    "merchant-name": { type: "string", default: "Demo Merchant Inc." },
+  },
+});
+
+const CART = buildCart({
+  item: argv.item,
+  price: argv.price,
+  currency: argv.currency,
+  merchantId: argv.merchant,
+  merchantName: argv["merchant-name"],
+});
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +47,8 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(join(__dirname, "public")));
 app.use("/lib/sw", express.static(join(__dirname, "node_modules/@simplewebauthn/browser/esm")));
+
+app.get("/cart", (_req, res) => res.json(CART));
 
 const port = await new Promise((resolve) => {
   const server = app.listen(0, "127.0.0.1", () => resolve(server.address().port));
@@ -88,7 +110,7 @@ app.post("/authenticate/verify", async (req, res) => {
       requireUserVerification: true,
     });
 
-    const result = {
+    const assertion = {
       verified: verification.verified,
       authenticatorInfo: verification.authenticationInfo,
       origin,
@@ -96,9 +118,13 @@ app.post("/authenticate/verify", async (req, res) => {
       timestamp: new Date().toISOString(),
     };
 
-    res.json(result);
+    const mandate = verification.verified ? buildPaymentMandate(assertion, CART) : null;
 
-    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+    res.json({ verified: verification.verified, mandate });
+
+    if (mandate) {
+      process.stdout.write(JSON.stringify(mandate, null, 2) + "\n");
+    }
     setTimeout(() => process.exit(verification.verified ? 0 : 1), 200);
   } catch (err) {
     res.status(400).json({ error: err.message });

@@ -2,25 +2,53 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>UCP Tester · Passkey Gate Spike</title>
+  <title>Agentic checkout · authorize with passkey</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: -apple-system, system-ui, sans-serif; max-width: 540px; margin: 4rem auto; padding: 0 1rem; color: #1a1a1a; }
-    h1 { font-size: 1.2rem; margin-bottom: 0.25rem; }
-    p.lede { color: #555; margin-top: 0; }
-    button { font-size: 1rem; padding: 0.6rem 1rem; border-radius: 6px; border: 1px solid #1a1a1a; background: #fff; cursor: pointer; }
+    body { font-family: -apple-system, system-ui, sans-serif; max-width: 540px; margin: 3rem auto; padding: 0 1.25rem; color: #1a1a1a; }
+    h1 { font-size: 1.35rem; margin-bottom: 0.25rem; }
+    p.lede { color: #555; margin-top: 0; line-height: 1.45; }
+    button { font-size: 1rem; padding: 0.7rem 1.1rem; border-radius: 6px; border: 1px solid #1a1a1a; background: #1a1a1a; color: #fff; cursor: pointer; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     .step { padding: 0.5rem 0; border-top: 1px solid #eee; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; }
     .step.ok { color: #0a7f2e; }
     .step.err { color: #b00020; white-space: pre-wrap; }
     #log { margin-top: 1.5rem; }
+    #success { display: none; margin-top: 1.5rem; padding: 1.1rem 1.25rem; background: #ecfdf3; border-left: 4px solid #0a7f2e; border-radius: 6px; }
+    #success .head { font-size: 1.05rem; font-weight: 600; color: #0a7f2e; }
+    #success .sub { color: #444; margin-top: 0.3rem; font-size: 0.9rem; }
+    #success .arrow { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    #mandate { display: none; margin-top: 1.5rem; padding: 1.25rem; border: 1px solid #d4d4d4; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+    #mandate .type { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; color: #777; letter-spacing: 0.02em; }
+    #mandate .id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; color: #999; word-break: break-all; }
+    #mandate .merchant { margin-top: 0.5rem; font-size: 1.05rem; font-weight: 600; }
+    #mandate .merchant .domain { font-weight: 400; color: #777; font-size: 0.85rem; margin-left: 0.4rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    #mandate table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.9rem; }
+    #mandate td { padding: 0.3rem 0; }
+    #mandate td.amt { text-align: right; font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    #mandate tr.line td { border-top: 1px solid #f0f0f0; }
+    #mandate tr.subtotal td, #mandate tr.tax td, #mandate tr.ship td { color: #555; }
+    #mandate tr.total td { border-top: 1px solid #d4d4d4; font-weight: 600; font-size: 1rem; padding-top: 0.5rem; }
+    #mandate .section { margin-top: 1rem; padding-top: 0.85rem; border-top: 1px solid #f0f0f0; }
+    #mandate .section .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: #777; margin-bottom: 0.35rem; }
+    #mandate .checks { display: grid; gap: 0.25rem; font-size: 0.88rem; }
+    #mandate .checks .ok { color: #0a7f2e; }
+    #mandate .checks code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; color: #555; }
+    #mandate .sig { font-size: 0.78rem; color: #999; margin-top: 0.75rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
   </style>
 </head>
 <body>
-  <h1>UCP Tester · Passkey Gate Spike</h1>
-  <p class="lede">Press the button to register a passkey, then authorize it. The whole flow uses your device's secure element (Touch ID, Windows Hello, hardware key).</p>
-  <button id="go">Run passkey ceremony</button>
+  <h1>Agentic checkout — authorize with passkey</h1>
+  <p class="lede">An agent has prepared this cart on your behalf. Review it, then authorize with your device's secure element (Touch ID, Windows Hello, hardware key). Nothing leaves your device without your gesture.</p>
+  <div id="mandate"></div>
+  <div id="actions" style="margin-top: 1.25rem; display: none;">
+    <button id="go">Authorize purchase</button>
+  </div>
   <div id="log"></div>
+  <div id="success">
+    <div class="head">✓ Verified — hardware-backed passkey</div>
+    <div class="sub"><span class="arrow">→</span> Payment Mandate also emitted to the terminal</div>
+  </div>
 
   <script type="module">
     import {
@@ -37,6 +65,13 @@
       log.appendChild(div);
       return div;
     };
+
+    // Render cart preview on load so the viewer sees what they're about to authorize
+    (async () => {
+      const cart = await fetch("/cart").then((r) => r.json());
+      renderCartPreview(cart);
+      document.getElementById("actions").style.display = "block";
+    })();
 
     btn.addEventListener("click", async () => {
       btn.disabled = true;
@@ -65,12 +100,76 @@
           body: JSON.stringify(authResp),
         }).then((r) => r.json());
         if (!authVerify.verified) throw new Error("auth not verified: " + JSON.stringify(authVerify));
-        step("✓ assertion verified · counter=" + authVerify.authenticatorInfo.newCounter, "ok");
-        step("✓ result sent to helper stdout · you can close this tab", "ok");
+        step("✓ assertion verified · mandate built", "ok");
+        step("✓ mandate sent to helper stdout · you can close this tab", "ok");
+        document.getElementById("success").style.display = "block";
+        renderMandate(authVerify.mandate);
       } catch (err) {
         step("✗ " + (err?.message ?? String(err)), "err");
       }
     });
+
+    function cartTable(cart) {
+      const lines = cart.lineItems.map((li) =>
+        `<tr class="line"><td>${li.description} <span style="color:#999;">×${li.quantity}</span></td><td class="amt">$${li.lineTotal}</td></tr>`
+      ).join("");
+      return `
+        <table>
+          ${lines}
+          <tr class="subtotal"><td>Subtotal</td><td class="amt">$${cart.totals.subtotal}</td></tr>
+          <tr class="tax"><td>Tax</td><td class="amt">$${cart.totals.tax}</td></tr>
+          <tr class="ship"><td>Shipping</td><td class="amt">$${cart.totals.shipping}</td></tr>
+          <tr class="total"><td>Total</td><td class="amt">$${cart.totals.total} ${cart.currency}</td></tr>
+        </table>`;
+    }
+
+    function renderCartPreview(cart) {
+      const el = document.getElementById("mandate");
+      el.innerHTML = `
+        <div class="type">ap2.PaymentMandate · pending authorization</div>
+        <div class="id" style="color:#bbb;">mandate id will be assigned after authorization</div>
+        <div class="merchant">${cart.merchant.name}<span class="domain">${cart.merchant.id}</span></div>
+        ${cartTable(cart)}
+        <div class="section">
+          <div class="label">Payment</div>
+          <div style="color:#888;">stripe_test · <em>(pending)</em></div>
+        </div>
+        <div class="section">
+          <div class="label">User authorization</div>
+          <div class="checks" style="color:#888;">
+            <div>○ Not yet authorized — click "Authorize purchase" to verify with your passkey</div>
+          </div>
+        </div>
+      `;
+      el.style.display = "block";
+    }
+
+    function renderMandate(m) {
+      const el = document.getElementById("mandate");
+      const ua = m.userAuthorization;
+      const expiresIn = Math.round((new Date(m.expiresAt) - new Date(m.issuedAt)) / 60000);
+      el.innerHTML = `
+        <div class="type">${m.type} · v${m.version}</div>
+        <div class="id">${m.id}</div>
+        <div class="merchant">${m.cart.merchant.name}<span class="domain">${m.cart.merchant.id}</span></div>
+        ${cartTable(m.cart)}
+        <div class="section">
+          <div class="label">Payment</div>
+          <div>${m.payment.instrument} · <code style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.85rem; color:#555;">${m.payment.instrumentReference}</code></div>
+        </div>
+        <div class="section">
+          <div class="label">User authorization</div>
+          <div class="checks">
+            <div class="ok">✓ WebAuthn · userVerified · hardware-backed (${ua.deviceType})</div>
+            <div>credentialID <code>${ua.credentialID}</code></div>
+            <div>valid for ${expiresIn} min · until ${new Date(m.expiresAt).toLocaleTimeString()}</div>
+          </div>
+        </div>
+        <div class="sig">${m.signature.alg} · ${m.signature.value.slice(0, 64)}…</div>
+      `;
+      el.style.display = "block";
+    }
+
   </script>
 </body>
 </html>
