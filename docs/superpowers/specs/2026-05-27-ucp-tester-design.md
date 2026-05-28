@@ -25,6 +25,21 @@ Goal of this PRD: rally collaborators around a sharp, tightly-scoped first deliv
 
 ---
 
+## Try the Phase 0 demo
+
+A working slice of this — passkey-gated authorization producing a mock AP2 Payment Mandate — is already runnable. In Claude Code:
+
+```
+> /plugin install <github-owner>/ucp-agentic-tester
+> buy a flat white for $5
+```
+
+The browser opens, you complete Touch ID (or Windows Hello / hardware key), and a verified `ap2.PaymentMandate` appears in *both* the browser receipt card and as JSON in the terminal. Claude validates four gates (totals, authorization, expiry, subject binding) and reports.
+
+Source: [`spike/passkey-gate/`](../../spike/passkey-gate/) (helper) and [`skills/agentic-purchase-gate/SKILL.md`](../../skills/agentic-purchase-gate/SKILL.md) (orchestration). Findings: [`spike/passkey-gate/FINDINGS.md`](../../spike/passkey-gate/FINDINGS.md).
+
+---
+
 ## The Gap
 
 A developer working on a UCP-enabled merchant today, outside a partner engagement, has no open way to answer:
@@ -147,18 +162,23 @@ This gives the tester something the rest of the toolchain hasn't shown yet: a re
 
 ## Phased Roadmap
 
-**Phase 0 — Passkey-gate feasibility spike.** *Target: 1–2 days. Go / no-go for shipping the gate in P1.*
+**Phase 0 — Passkey-gate feasibility spike.** *Status: macOS leg ✓, demo skill shipped as Claude Code plugin · CI leg pending · spot-check pending.*
 
-The riskiest assumption in this PRD is *"a Claude skill can drive a real WebAuthn ceremony end-to-end via a local helper and receive the assertion back."* Until that's proven, the passkey gate is paper. The spike is the smallest thing that validates it:
+The riskiest assumption in this PRD was *"a Claude skill can drive a real WebAuthn ceremony end-to-end via a local helper and receive the assertion back."* Phase 0 validated it for the macOS surface and went further: the demo emits a structurally-AP2-shaped Payment Mandate (mock crypto, real ceremony) and runs from a natural-language purchase intent typed into Claude Code.
 
-- Build the local helper as a throwaway script (`node` / `go` / `python`, whichever lands fastest): ephemeral web server, `/gate` page running `navigator.credentials.create` then `navigator.credentials.get`, assertion POSTed back, written to stdout or a file.
-- Invoke it from a throwaway Claude skill via Bash; confirm the skill receives the assertion and can act on it.
-- Validate on macOS with Touch ID (primary dev surface). Spot-check at least one other path — Windows Hello *or* an Android phone hitting the local URL over Wi-Fi.
-- Validate the CI path: same helper, Chrome DevTools Protocol virtual authenticator (`WebAuthn.addVirtualAuthenticator`), end-to-end pass with no human present.
+What was built and validated:
 
-**Exit criteria:** assertion successfully round-trips skill → browser → secure element → skill on macOS *and* on the CI virtual-authenticator path. Spike output is a one-page note + the throwaway code, both checked into the repo so future contributors don't relitigate.
+- Local helper at `spike/passkey-gate/` (Node + Express + `@simplewebauthn/server`). Ephemeral web server, `/gate` page running registration + authentication ceremonies, server-side signature verification, mandate emission.
+- `agentic-purchase-gate` Claude skill at `skills/agentic-purchase-gate/SKILL.md`. Parses intent ("buy X for $Y"), invokes the helper, validates four gates (totals match, hardware-backed user verification, expiry window, subject binding), reports.
+- Demo packaged as a Claude Code plugin (`.claude-plugin/plugin.json`, name `ucp-agentic-tester`), installable via `/plugin install <github-owner>/ucp-agentic-tester` once published.
+- Validated repeatedly on macOS Touch ID (6+ successful runs, multiple distinct purchase intents). Same canonical Payment Mandate rendered in both the browser receipt UI and the terminal JSON per ceremony.
 
-**Decision the spike unblocks:** does the passkey gate ship in P1, or slip to P1.5? (Currently open below.)
+**Still open before Phase 0 is fully closed:**
+
+- **CI virtual-authenticator leg** — same helper driven by a Playwright script using Chrome DevTools Protocol's `WebAuthn.addVirtualAuthenticator`. Required exit criterion.
+- **Spot-check** on one of: Windows Hello, or Android over Wi-Fi (mobile passkey via StrongBox).
+
+The macOS leg alone is enough to consider *technical feasibility settled*. The remaining items harden the case; they don't reopen it.
 
 **Phase 1 — Skill + happy-path scenario + passkey gate.** *Target: weeks, not months.*
 - YAML scenario format spec, plus reference `scenarios/happy-path.yaml`
@@ -208,7 +228,7 @@ We are explicitly leaving these open so collaborators can weigh in:
 - **Sandbox merchant location.** Same repo, peer repo, or external reference?
 - **Hosted "paste-a-URL" web UI**, or strictly local-first?
 - **AP2 adapter scope.** Intent + Cart + Payment Mandate as a single adapter, or staged sub-adapters?
-- **Passkey scope in P1.** Ship the passkey gate in Phase 1 alongside Stripe (deeper, more compelling demo), or ship the gate as P1.5 (faster to first green run)?
+- ~~**Passkey scope in P1.**~~ **Resolved (Phase 0).** Ship the passkey gate in P1. The demo is already runnable as the `agentic-purchase-gate` skill of the `ucp-agentic-tester` plugin; the promotion path to real DPC + Multipaz in P5 is unchanged.
 
 ---
 
