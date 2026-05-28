@@ -1,0 +1,5 @@
+{
+  "name": "ucp-agentic-tester",
+  "version": "0.1.0",
+  "description": "Test and demo UCP / agentic-commerce workflows. Phase 0 ships the agentic-purchase-gate skill: a passkey-gated checkout demo that drives a real WebAuthn ceremony and emits a mock AP2 Payment Mandate. See docs/superpowers/specs/2026-05-27-ucp-tester-design.md for the broader PRD."
+}

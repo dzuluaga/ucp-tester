@@ -23,7 +23,7 @@ Do NOT use for:
 
 ## Procedure
 
-Repo root: `/Users/diegozuluaga/tools/git/ucp-agentic-tester` (treat as the relative anchor — bash cwd resets between calls, always `cd` explicitly).
+The helper script `run.sh` lives at `../../spike/passkey-gate/` relative to this SKILL.md. When the skill is loaded (either via `/plugin install` or running `claude` in the plugin repo), Claude Code's bash invocation cwd is set to the skill's own directory, so the relative path resolves correctly.
 
 **1. Parse the user's intent.**
 
@@ -34,10 +34,12 @@ Repo root: `/Users/diegozuluaga/tools/git/ucp-agentic-tester` (treat as the rela
 **2. Invoke the helper.**
 
 ```bash
-cd /Users/diegozuluaga/tools/git/ucp-agentic-tester/spike/passkey-gate && ./run.sh --item "<ITEM>" --price <PRICE>
+../../spike/passkey-gate/run.sh --item "<ITEM>" --price <PRICE>
 ```
 
 Use the Bash tool, foreground (NOT background), with timeout >= 180000ms. The helper itself has a 120s internal timeout for the user's Touch ID gesture; bash needs headroom beyond that. Before invoking, tell the user one short line like *"On it. Building the cart and opening the passkey gate."* so they know the browser is about to pop.
+
+If the relative path resolves to a "no such file" error, fall back to discovering the plugin root: `find ~/.claude/plugins -name "run.sh" -path "*ucp-agentic-tester*passkey-gate*" -print -quit` returns the absolute path; invoke that directly.
 
 **3. Wait for the helper to exit.**
 
