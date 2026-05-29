@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DC Payment Gate — present payment credential</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 15px/1.5 -apple-system, system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; }
+  h1 { font-size: 20px; }
+  button { font: inherit; padding: 10px 18px; border-radius: 8px; border: 1px solid #888; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  pre { background: rgba(127,127,127,.12); padding: 12px; border-radius: 8px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+  .ok { color: #1a7f37; } .err { color: #cf222e; }
+  .step { margin: 6px 0; }
+  .muted { opacity: .7; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>Agentic checkout — present your payment credential</h1>
+<p id="cart" class="muted">Loading cart…</p>
+<p class="muted">
+  The localhost helper signs an OpenID4VP request (self-signed reader cert) and hands it here.
+  This page calls <code>navigator.credentials.get({digital})</code> for an EMVCo
+  <strong>Digital Payment Credential</strong> (<code>urn:emvco:dpc:card:1</code>, or the Multipaz
+  mdoc form). Desktop Chrome (141+) should render a cross-device QR; scan it with your Android
+  Multipaz wallet and present the credential. You'll likely see an <strong>"unverified verifier"</strong>
+  warning — that's expected (self-signed); consent anyway. The encrypted <code>vp_token</code>
+  returns through this page to the helper, which decrypts it and shows the disclosed fields.
+</p>
+<p class="muted">
+  <strong>Prerequisite:</strong> a Digital Payment Credential must already be provisioned in your
+  Multipaz wallet (from <code>issuer.multipaz.org</code> or a local issuer). If you don't have one,
+  the request returns "no matching credential."
+</p>
+
+<p><button id="go">Present my payment credential</button></p>
+
+<div id="log"></div>
+<pre id="out" hidden></pre>
+
+<script type="module">
+const log = document.getElementById("log");
+const out = document.getElementById("out");
+const btn = document.getElementById("go");
+
+fetch("/cart").then((r) => r.json()).then((c) => {
+  document.getElementById("cart").textContent =
+    `${c.lineItems[0].description} — ${c.totals.total} ${c.currency} to ${c.merchant.name}`;
+}).catch(() => {});
+
+function step(msg, cls = "") {
+  const d = document.createElement("div");
+  d.className = "step " + cls;
+  d.textContent = msg;
+  log.appendChild(d);
+}
+function show(obj) {
+  out.hidden = false;
+  out.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+}
+async function post(body) {
+  try {
+    const res = await fetch("/result", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return await res.json();
+  } catch (e) {
+    step("(could not POST result back to helper: " + e.message + ")", "err");
+    return null;
+  }
+}
+
+// Render the disclosed claims the helper decoded (server-side, after decrypting the
+// JWE). Works for both the mdoc and SD-JWT payment-credential forms (flattened shape).
+function renderDisclosed(disclosed) {
+  if (!disclosed || !disclosed.length) return;
+  const wrap = document.createElement("div");
+  for (const entry of disclosed) {
+    const head = document.createElement("p");
+    head.className = "ok";
+    head.style.fontSize = "16px";
+    head.append("Presented: ");
+    const strong = document.createElement("strong");
+    strong.textContent = entry.type || entry.format;
+    head.appendChild(strong);
+    wrap.appendChild(head);
+
+    for (const c of entry.claims ?? []) {
+      const v = typeof c.value === "string" ? c.value : JSON.stringify(c.value);
+      const line = document.createElement("div");
+      line.className = "step muted";
+      line.textContent = c.label + " = " + v;
+      wrap.appendChild(line);
+    }
+  }
+  log.appendChild(wrap);
+}
+
+btn.addEventListener("click", async () => {
+  btn.disabled = true;
+
+  if (!("credentials" in navigator) || !window.DigitalCredential) {
+    step("✗ navigator.credentials.get({digital}) is not available in this browser.", "err");
+    step("Need Chrome 141+. For localhost dev enable chrome://flags#web-identity-digital-credentials.", "muted");
+    await post({ ok: false, error: "DigitalCredential API unavailable in this browser/build" });
+    return;
+  }
+
+  // Fetch the signed request object the helper built (protocol + { request: <jwt> }).
+  let signed;
+  try {
+    signed = await (await fetch("/request")).json();
+  } catch (e) {
+    step("✗ could not fetch the signed request from the helper: " + e.message, "err");
+    await post({ ok: false, error: "fetch /request failed: " + e.message });
+    return;
+  }
+
+  step("Calling navigator.credentials.get({digital}) with a signed request — Chrome should now show a QR…");
+
+  try {
+    const result = await navigator.credentials.get({
+      digital: { requests: [signed] },
+      mediation: "required",
+    });
+    step("✓ vp_token returned through the page — PATH A (SIGNED) WORKS", "ok");
+
+    const protocol = result?.protocol ?? null;
+    let data = result?.data ?? null;
+    if (typeof data === "string") {
+      try { data = JSON.parse(data); } catch { /* keep as string */ }
+    }
+    show({ protocol, data });
+    // Helper decrypts the JWE server-side (it holds the encryption private key)
+    // and returns the structurally-decoded mDL claims.
+    const ack = await post({ ok: true, protocol, data });
+    if (ack?.disclosed) renderDisclosed(ack.disclosed);
+    else step("(helper received the token but returned no decoded claims — check the terminal)", "muted");
+  } catch (e) {
+    step("✗ get({digital}) rejected: " + (e?.name || "Error") + " — " + (e?.message || String(e)), "err");
+    show({ name: e?.name, message: e?.message });
+    await post({ ok: false, error: (e?.name || "Error") + ": " + (e?.message || String(e)) });
+  }
+});
+</script>
+</body>
+</html>
