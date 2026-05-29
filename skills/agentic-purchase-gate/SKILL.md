@@ -14,6 +14,7 @@ Trigger on any of:
 - "buy X for $Y" / "purchase X for $Y" / "I want to get X for $Y"
 - "test the passkey gate" / "demo agentic checkout"
 - Any request that pairs a noun-phrase item with a price.
+- For the digital-credential path specifically: "use the payment credential", "DC payment gate", "wallet-signed mandate" → use the DC-payment-gate variant (see below).
 
 Do NOT use for:
 
@@ -79,6 +80,42 @@ If any gate fails, surface *which one* and the offending field values, and do no
 
 Skill would now call `merchant.checkoutComplete(mandate)` and continue to `order.get`.
 ```
+
+## DC-payment-gate variant (wallet-signed amount binding)
+
+When the user asks for the **cross-device / digital-credential** payment path (phrases like
+"use the payment credential", "DC payment gate", "wallet-signed mandate", or after the
+passkey path when they want the amount cryptographically bound), drive
+`../../spike/dc-payment-gate/run.sh` instead of passkey-gate. Same intent parsing.
+
+```bash
+../../spike/dc-payment-gate/run.sh --item "<ITEM>" --price <PRICE>
+```
+
+Foreground, timeout >= 180000ms. Tell the user one line first: *"Opening the payment-credential
+gate — scan the QR with your wallet and confirm the amount."*
+
+The helper opens Chrome with a cross-device QR. The user scans it with the Multipaz wallet,
+which renders the **amount and payee** and signs a `transaction_data_hash` over them. The
+encrypted response returns through the page; the helper emits an `ap2.PaymentMandate` whose
+`userAuthorization` carries the **real wallet-signed hash** (no MOCK-DEV-SIGNER). The piped
+`validate.js` runs the 4 gates and prints `{ "authorized": <bool>, "gates": [...] }`.
+
+Exit codes: `0` all gates pass · `1` a gate failed (read the `gates` array) · `3` user
+rejected · `4` hash mismatch · `5` decode/assembly error · `124` 120s timeout.
+
+The 4 gates (already computed by `validate.js` — narrate its output, do not recompute):
+
+| Gate | Check |
+|---|---|
+| Amount binding | `SHA-256(userAuthorization.transactionData)` == the hash signed in the vpToken's `deviceSigned`, AND the decoded transaction_data amount/payee == `cart.totals.total`/`cart.merchant.id` |
+| Authorization present | vpToken decodes to a DeviceResponse with non-empty `issuerAuth` + a `deviceAuth` block |
+| Credential not expired | disclosed `expiry_date` is in the future |
+| Subject binding | `subject.credentialId` == the disclosed `payment_instrument_id` |
+
+Real vs mock for this path: **real** = the wallet presentation, the amount binding (wallet-signed),
+the disclosed instrument fields, the gate checks. **Mock** = no issuer/ASPSP trust verification
+(self-signed reader cert, advisory trust); no money moves; no merchant contacted.
 
 ## Scope and honesty
 
