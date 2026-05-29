@@ -116,8 +116,10 @@ gate 1 from the mandate's cart and the transaction_data construction.
 2. **Authorization present & structurally valid.** `vpToken` decodes to a DeviceResponse
    with a `deviceAuth` signature block and non-empty `issuerAuth`. Structural only — no
    trust-chain verification (advisory-trust posture).
-3. **Credential not expired.** Disclosed `expiry_date` is future, and MSO
-   `validityInfo.validUntil` has not passed.
+3. **Credential not expired.** Disclosed `expiry_date` is future. (MSO
+   `validityInfo.validUntil` verification is out of scope — it needs COSE_Sign1 decoding
+   and carries no trust value under the advisory-trust posture, since we don't verify
+   issuer signatures anyway.)
 4. **Subject binding.** `subject.credentialId` matches disclosed `payment_instrument_id`
    and instrument fields are present.
 
