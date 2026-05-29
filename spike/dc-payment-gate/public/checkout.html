@@ -14,11 +14,18 @@
   .ok { color: #1a7f37; } .err { color: #cf222e; }
   .step { margin: 6px 0; }
   .muted { opacity: .7; font-size: 13px; }
+  .panel { border: 1px solid rgba(127,127,127,.35); border-radius: 8px; padding: 12px 14px; margin: 14px 0; }
+  .panel h2 { font-size: 14px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; opacity: .8; }
+  .kv { display: grid; grid-template-columns: 150px 1fr; gap: 2px 10px; font-size: 13px; }
+  .kv dt { opacity: .65; } .kv dd { margin: 0; word-break: break-word; font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.ok { background: rgba(26,127,55,.15); } .badge.err { background: rgba(207,34,46,.15); }
 </style>
 </head>
 <body>
 <h1>Agentic checkout — present your payment credential</h1>
-<p id="cart" class="muted">Loading cart…</p>
+<div id="sent" class="panel"><h2>Sent to wallet</h2><p class="muted">Loading cart…</p></div>
 <p class="muted">
   The localhost helper signs an OpenID4VP request (self-signed reader cert) and hands it here.
   This page calls <code>navigator.credentials.get({digital})</code> for an EMVCo
@@ -36,6 +43,7 @@
 
 <p><button id="go">Present my payment credential</button></p>
 
+<div id="received" class="panel" hidden><h2>Received from wallet — payment mandate</h2></div>
 <div id="log"></div>
 <pre id="out" hidden></pre>
 
@@ -44,10 +52,57 @@ const log = document.getElementById("log");
 const out = document.getElementById("out");
 const btn = document.getElementById("go");
 
-fetch("/cart").then((r) => r.json()).then((c) => {
-  document.getElementById("cart").textContent =
-    `${c.lineItems[0].description} — ${c.totals.total} ${c.currency} to ${c.merchant.name}`;
+function kv(pairs) {
+  const dl = document.createElement("dl");
+  dl.className = "kv";
+  for (const [k, v, mono] of pairs) {
+    const dt = document.createElement("dt"); dt.textContent = k;
+    const dd = document.createElement("dd"); dd.textContent = v; if (mono) dd.className = "mono";
+    dl.append(dt, dd);
+  }
+  return dl;
+}
+
+// "Sent to wallet": the transaction_data payload (amount + payee) and the hash we expect
+// the wallet to sign over it. This is what cryptographically binds the consent.
+fetch("/sent").then((r) => r.json()).then(({ cart, transactionData, expectedHash }) => {
+  const p = transactionData.payload;
+  const panel = document.getElementById("sent");
+  panel.innerHTML = "<h2>Sent to wallet</h2>";
+  panel.appendChild(kv([
+    ["Item", cart.lineItems[0].description],
+    ["Amount", `${p.amount} ${p.currency}`],
+    ["Payee", `${p.payee.name} (${p.payee.id})`],
+    ["Cart total", `${cart.totals.total} ${cart.currency} (= ${cart.totals.subtotal} + ${cart.totals.tax} tax + ${cart.totals.shipping} ship)`],
+    ["transaction_id", p.transaction_id, true],
+    ["expected hash", expectedHash, true],
+  ]));
 }).catch(() => {});
+
+// "Received from wallet": the assembled ap2.PaymentMandate, plus the wallet-signed hash
+// vs. the expected hash (the binding the helper verifies).
+function renderReceived(ack) {
+  const panel = document.getElementById("received");
+  panel.hidden = false;
+  panel.innerHTML = "<h2>Received from wallet — payment mandate</h2>";
+  const badge = document.createElement("span");
+  badge.className = "badge " + (ack.verified ? "ok" : "err");
+  badge.textContent = ack.verified ? "amount binding VERIFIED" : "HASH MISMATCH";
+  panel.appendChild(badge);
+  const inst = ack.mandate?.payment?.instrument ?? {};
+  panel.appendChild(kv([
+    ["signed hash", ack.signedHash ?? "(none)", true],
+    ["expected hash", ack.expectedHash ?? "(none)", true],
+    ["mandate id", ack.mandate?.id ?? "(none)", true],
+    ["amount", ack.mandate ? `${ack.mandate.payment.amount} ${ack.mandate.payment.currency}` : "(none)"],
+    ["instrument", `${inst.issuer ?? "?"} · ${inst.maskedAccount ?? "?"} · ${inst.holder ?? "?"}`],
+  ]));
+  if (ack.mandate) {
+    const pre = document.createElement("pre");
+    pre.textContent = JSON.stringify(ack.mandate, null, 2);
+    panel.appendChild(pre);
+  }
+}
 
 function step(msg, cls = "") {
   const d = document.createElement("div");
@@ -139,6 +194,7 @@ btn.addEventListener("click", async () => {
     const ack = await post({ ok: true, protocol, data });
     if (ack?.disclosed) renderDisclosed(ack.disclosed);
     else step("(helper received the token but returned no decoded claims — check the terminal)", "muted");
+    if (ack?.mandate) renderReceived(ack);
   } catch (e) {
     step("✗ get({digital}) rejected: " + (e?.name || "Error") + " — " + (e?.message || String(e)), "err");
     show({ name: e?.name, message: e?.message });

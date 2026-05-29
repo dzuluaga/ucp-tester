@@ -83,6 +83,9 @@ const signedJwt = await new jose.SignJWT(requestObject)
   .setIssuedAt().sign(readerKeys.privateKey);
 
 app.get("/cart", (_req, res) => res.json(cart));
+// What we're asking the wallet to sign over: the transaction_data payload (amount + payee)
+// and the hash we expect the wallet to sign (SHA-256 of the base64url transaction_data string).
+app.get("/sent", (_req, res) => res.json({ cart, transactionData: txData, transactionDataB64: txDataB64, expectedHash: expectedTxHashB64url }));
 app.get("/request", (_req, res) => res.json({ protocol: "openid4vp-v1-signed", data: { request: signedJwt } }));
 
 app.post("/result", async (req, res) => {
@@ -106,7 +109,7 @@ app.post("/result", async (req, res) => {
     const verified = tokenHash === expectedTxHashB64url;
 
     const mandate = buildPaymentMandate({ cart, vpStr, claims, transactionDataB64: txDataB64, tokenHash, verified });
-    res.json({ received: true, disclosed, verified });
+    res.json({ received: true, disclosed, verified, expectedHash: expectedTxHashB64url, signedHash: tokenHash, mandate });
     process.stderr.write(`\n[gate] ✓ presentation returned; transaction_data_hash ${verified ? "MATCHES" : "MISMATCH"} (token=${tokenHash} expected=${expectedTxHashB64url})\n`);
     process.stdout.write(JSON.stringify(mandate, null, 2) + "\n");
     setTimeout(() => process.exit(verified ? 0 : 4), 200);
