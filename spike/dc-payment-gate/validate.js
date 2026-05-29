@@ -53,7 +53,14 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (!raw.trim()) { process.stderr.write("[gate] no mandate on stdin (helper did not emit one)\n"); process.exit(2); }
   let mandate;
   try { mandate = JSON.parse(raw); } catch (e) { process.stderr.write(`[gate] invalid mandate JSON: ${e}\n`); process.exit(2); }
-  const results = await runGates(mandate);
+  let results;
+  try {
+    results = await runGates(mandate);
+  } catch (e) {
+    process.stderr.write(`[gate] ✗ could not evaluate gates (malformed mandate): ${e}\n`);
+    process.stdout.write(JSON.stringify({ authorized: false, error: String(e), mandate }, null, 2) + "\n");
+    process.exit(1);
+  }
   let allPass = true;
   for (const r of results) { allPass = allPass && r.pass; process.stderr.write(`[gate] ${r.pass ? "✓" : "✗"} ${r.gate} — ${r.detail}\n`); }
   process.stdout.write(JSON.stringify({ authorized: allPass, gates: results, mandate }, null, 2) + "\n");

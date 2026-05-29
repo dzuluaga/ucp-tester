@@ -44,3 +44,9 @@ test("gate 4 fails when subject does not match the disclosed instrument", async 
   assert.equal(pass(results, "Subject binding"), false);
   assert.equal(pass(results, "Amount binding"), true);
 });
+
+test("runGates throws on a non-decodable vpToken (CLI catches and fails closed)", async () => {
+  const { mandate } = await makeConsistentMandate();
+  mandate.userAuthorization.vpToken = "!!!not-valid-base64url-cbor!!!";
+  await assert.rejects(() => runGates(mandate));
+});
