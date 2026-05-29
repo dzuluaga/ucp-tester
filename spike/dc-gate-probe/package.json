@@ -1,0 +1,16 @@
+{
+  "name": "ucp-tester-dc-gate-probe",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Leg 0 probe: does a localhost page drive a cross-device Digital Credentials presentation (Path A) with Multipaz?",
+  "type": "module",
+  "scripts": {
+    "start": "node probe.js"
+  },
+  "dependencies": {
+    "@peculiar/x509": "^1.12.3",
+    "cbor-x": "^1.6.0",
+    "express": "^4.21.2",
+    "jose": "^5.9.6"
+  }
+}
